@@ -206,6 +206,21 @@ class NonterminalActions:
 
     n_classdefdeco2 = n_classdef
 
+    def format_const(self, elem):
+        """
+        Render one constant collection element (ADD_VALUE) to source text,
+        the same way n_LOAD_CONST formats that constant on its own.
+
+        The scanners disagree on where the value lives: the 2.x
+        const-collection path stores the value in pattr, while the 3.7+ path
+        stores the value in attr (pattr already holds its argrepr). Pick the
+        field that holds the actual value, then repr() it exactly once.
+        """
+        data = elem.attr if self.version >= (3, 0) else elem.pattr
+        if isinstance(data, (float, complex)):
+            return better_repr(data, self.version)
+        return repr(data)
+
     def n_const_list(self, node: SyntaxTree):
         """
         prettyprint a constant dict, list, set or tuple.
@@ -242,13 +257,10 @@ class NonterminalActions:
                 assert elem.kind == "ADD_VALUE"
                 if elem.optype in ("local", "name"):
                     value = elem.attr
-                elif elem.optype == "const" and not isinstance(elem.attr, str):
-                    value = elem.attr
+                elif elem.optype == "const":
+                    value = self.format_const(elem)
                 else:
-                    try:
-                        value = "%r" % elem.pattr
-                    except Exception:
-                        value = elem.pattr
+                    value = elem.pattr
                 if elem.linestart is not None:
                     if elem.linestart != self.line_number:
                         next_indent = self.indent + INDENT_PER_LEVEL[:-1]
@@ -276,7 +288,7 @@ class NonterminalActions:
                     if elem.optype in ("local", "name"):
                         value = elem.attr
                     elif elem.optype == "const":
-                        value = elem.pattr
+                        value = self.format_const(elem)
                     else:
                         value = "%s" % repr(elem.attr)
                 else:
